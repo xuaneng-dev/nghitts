@@ -14,5 +14,4 @@ nghitts/.wrangler/
 .cursor/
 
 # Large Datasets & Training Results (Excluded to fit GitHub limits)
-dataset-ngochuyen1000/
 results/
