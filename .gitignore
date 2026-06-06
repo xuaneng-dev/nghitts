@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+nghitts/node_modules/
+
+# Compilation outputs
+dist/
+nghitts/dist/
+.wrangler/
+nghitts/.wrangler/
+
+# Logs and OS files
+*.log
+.DS_Store
+.cursor/
+
+# Large Datasets & Training Results (Excluded to fit GitHub limits)
+dataset-ngochuyen1000/
+results/
