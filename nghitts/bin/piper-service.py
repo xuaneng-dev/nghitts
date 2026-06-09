@@ -5,6 +5,39 @@ import io
 import os
 import traceback
 
+# Prevent importing the local folder 'bin/piper' as a namespace package
+# by removing the script's directory from sys.path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path = [p for p in sys.path if os.path.abspath(p) != script_dir]
+
+# Helper to automatically register pip-installed CUDA/cuDNN DLLs on Windows
+if sys.platform == 'win32':
+    import site
+    try:
+        paths = site.getsitepackages()
+        user_site = site.getusersitepackages()
+        if user_site not in paths:
+            paths.append(user_site)
+    except Exception:
+        paths = []
+    
+    for p in sys.path:
+        if p not in paths and ('site-packages' in p or 'Lib' in p or 'lib' in p):
+            paths.append(p)
+            
+    for base_path in paths:
+        nvidia_path = os.path.join(base_path, 'nvidia')
+        if os.path.isdir(nvidia_path):
+            for sub in os.listdir(nvidia_path):
+                sub_bin = os.path.join(nvidia_path, sub, 'bin')
+                if os.path.isdir(sub_bin):
+                    try:
+                        os.add_dll_directory(sub_bin)
+                    except Exception:
+                        pass
+                    # Prepend to PATH so standard C++ LoadLibrary resolves dependent DLLs correctly
+                    os.environ['PATH'] = sub_bin + os.pathsep + os.environ['PATH']
+
 try:
     import piper
 except ImportError:
@@ -16,6 +49,10 @@ except ImportError:
     import piper
 
 def main():
+    # Reconfigure stdin to UTF-8 to prevent text corruption on Windows
+    if hasattr(sys.stdin, 'reconfigure'):
+        sys.stdin.reconfigure(encoding='utf-8')
+        
     if len(sys.argv) < 2:
         print("Usage: python3 piper-service.py <model_path>", file=sys.stderr)
         sys.exit(1)
@@ -27,15 +64,19 @@ def main():
         print(f"Model path not found: {model_path}", file=sys.stderr)
         sys.exit(1)
         
-    # Check if CUDA (GPU acceleration) is available in ONNX Runtime
-    use_cuda = False
-    try:
-        import onnxruntime as ort
-        if "CUDAExecutionProvider" in ort.get_available_providers():
-            use_cuda = True
-            print("CUDA Execution Provider detected. Enabling GPU acceleration!", file=sys.stderr)
-    except Exception as e:
-        print(f"Notice: Could not check for CUDA availability ({e}). Using default settings.", file=sys.stderr)
+    # Check if CUDA (GPU acceleration) is requested and available
+    use_cuda = "--cuda" in sys.argv
+    if use_cuda:
+        try:
+            import onnxruntime as ort
+            if "CUDAExecutionProvider" in ort.get_available_providers():
+                print("CUDA Execution Provider detected. Enabling GPU acceleration!", file=sys.stderr)
+            else:
+                print("Warning: CUDA is not available. Falling back to CPU.", file=sys.stderr)
+                use_cuda = False
+        except Exception as e:
+            print(f"Notice: Could not check for CUDA availability ({e}). Using CPU.", file=sys.stderr)
+            use_cuda = False
 
     # Load voice
     try:

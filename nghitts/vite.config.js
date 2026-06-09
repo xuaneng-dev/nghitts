@@ -26,8 +26,17 @@ export default defineConfig({
           
           // Handle /api/tts-local/status endpoint to check if local backend is available
           if (url === '/tts-local/status' || url === '/tts-local/status/') {
+            let isAvailable = false;
+            try {
+              const { execSync } = await import('child_process');
+              const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+              execSync(`${pythonCmd} -c "import sys; sys.path = [p for p in sys.path if not p.endswith('bin')]; import piper; piper.PiperVoice"`, { stdio: 'ignore' });
+              isAvailable = true;
+            } catch (e) {
+              isAvailable = false;
+            }
             res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify({ available: true, type: 'python-service' }));
+            res.end(JSON.stringify({ available: isAvailable, type: 'python-service' }));
             return;
           }
 
@@ -39,14 +48,15 @@ export default defineConfig({
               return;
             }
 
-            let body = '';
+            const bodyChunks = [];
             req.on('data', chunk => {
-              body += chunk;
+              bodyChunks.push(chunk);
             });
 
             req.on('end', async () => {
               let reqData;
               try {
+                const body = Buffer.concat(bodyChunks).toString('utf-8');
                 reqData = JSON.parse(body);
               } catch (err) {
                 res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
